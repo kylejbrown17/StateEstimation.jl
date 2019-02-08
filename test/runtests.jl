@@ -2,6 +2,7 @@ using Test
 using StateEstimation
 using LinearAlgebra
 
+# Transtion Models
 x = [0.0;1.0]
 A = [1.0 0.1; 0.0 1.0]
 B = reshape([0.0; 0.1],(2,1))
@@ -44,3 +45,26 @@ m = GaussianBearingSensor([0.0;0.0],R)
 @test (x - m.x)/norm(x) != observe(m,x)
 @test (x - m.x)/norm(x) != observe(m,x,u)
 @test norm(observe(m,x)) == 1.0
+
+# Filters
+n = 2; m = 1; p = 2
+x = [0.0;1.0]
+u = [1.0]
+μ₀ = [0.0;1.0]
+Σ₀ = Matrix{Float64}(I,2,2)
+A = [1.0 0.1; 0.0 1.0]
+B = reshape([0.0; 0.1],(2,1))
+C = Matrix{Float64}(I,2,2)
+D = fill!(Matrix{Float64}(undef,2,1),0.0)
+Q = Matrix{Float64}(I,2,2)
+R = Matrix{Float64}(I,2,2)
+sysF = DiscreteLinearGaussianSystem(x,A,B,Q)
+sysG = LinearGaussianSensor(C,D,R)
+
+m = KalmanFilter(μ₀,Σ₀,sysF,sysG)
+predict(m,m.μ,m.Σ,u)
+update(m,m.μ,m.Σ,observe(sysG,x))
+
+m = KalmanFilter(SVector{2}(μ₀),SMatrix{2,2}(Σ₀),sysF,sysG)
+predict(m,m.μ,m.Σ,u)
+update(m,m.μ,m.Σ,observe(sysG,x))

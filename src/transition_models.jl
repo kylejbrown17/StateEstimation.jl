@@ -1,11 +1,11 @@
 export
     TransitionModel,
-    getDiscreteLinearSystem,
+    DynamicSystem,
     DiscreteLinearSystem,
     DiscreteLinearGaussianSystem,
     BinaryReachabilityTransitionModel,
     propagate,
-    propagate!,
+    # propagate!,
     state_jacobian
 
 abstract type TransitionModel end
@@ -16,15 +16,14 @@ deterministic(m::DeterministicTransitionModel) = m
 # deterministic(m::ProbabilisticTransitionModel) = throw(deterministic, string("deterministic(m::",typeof(m),"not defined)"))
 
 mutable struct DynamicSystem{T,F}
-    x::T
-    transition_model::F
+    x::T                # system state
+    transition_model::F # state transition_model model
 end
 deterministic(m::DynamicSystem{T,F} where {T,F}) = DynamicSystem(x,deterministic(m.transition_model))
 predict(sys,u) = predict(sys.transition_model,sys.x,u)
 function predict!(sys,u)
     sys.x = predict(sys,u)
 end
-
 
 mutable struct DiscreteLinearSystem <: DeterministicTransitionModel
     x::Vector{Float64} # state
@@ -37,9 +36,9 @@ end
 function propagate(sys::DiscreteLinearSystem,x,u)
     sys.A*x + sys.B*u
 end
-function propagate!(sys::DiscreteLinearSystem,u)
-    sys.x = propagate(sys,sys.x,u)
-end
+# function propagate!(sys::DiscreteLinearSystem,u)
+#     sys.x = propagate(sys,sys.x,u)
+# end
 function state_jacobian(sys::DiscreteLinearSystem,x)
     sys.A
 end
@@ -64,9 +63,9 @@ end
 function propagate(sys::DiscreteLinearGaussianSystem,x,u)
     sys.A*x + sys.B*u + rand(sys.proc_noise)
 end
-function propagate!(sys::DiscreteLinearGaussianSystem,u)
-    sys.x = propagate(sys,sys.x,u)
-end
+# function propagate!(sys::DiscreteLinearGaussianSystem,u)
+#     sys.x = propagate(sys,sys.x,u)
+# end
 function state_jacobian(sys::DiscreteLinearGaussianSystem,x)
     state_jacobian(sys)
 end

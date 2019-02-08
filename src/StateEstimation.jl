@@ -7,25 +7,16 @@ using StaticArrays
 
 export
     Filter,
-    ObservationModel,
-    TransitionModel,
-    DeterministicObservationModel,
-    ProbabilisticObservationModel,
-    getDiscreteLinearSystem,
-    DiscreteLinearSystem,
-    DiscreteLinearGaussianSystem,
-    propagate,
-    propagate!,
-    state_jacobian,
+    BinaryDiscreteFilter,
+    KalmanFilter,
+    ExtendedKalmanFilter, EKF,
+    UnscentedKalmanFilter, UKF,
+    deterministic,
+    predict,
+    predict!,
+    update,
+    update!
 
-    LinearSensor,
-    LinearGaussianSensor,
-    RangeSensor,
-    GaussianRangeSensor,
-    BearingSensor,
-    GaussianBearingSensor,
-    observe,
-    measurement_jacobian
 
 include("observation_models.jl")
 include("transition_models.jl")
@@ -51,10 +42,16 @@ mutable struct KalmanFilter{T,V} <: Filter
     # D::SMatrix{p,m,T}
     # Q::SMatrix{n,n,Float64}
     # R::SMatrix{p,p,Float64}
+    transition_model::DiscreteLinearGaussianSystem
     observation_model::LinearGaussianSensor
-    transition_model::DiscreteLinearSystem
 end
-function predict(m::KalmanFilter,μ,Σ,u::T)
+function KalmanFilter(μ,Σ,A,B,C,D,Q,R)
+    KalmanFilter(μ,Σ,DiscreteLinearGaussianSystem(A,B,Q),LinearGaussianSensor(C,D,R))
+end
+function KalmanFilter(μ,Σ,A,B,C,D,Q,R)
+    KalmanFilter(μ,Σ,DiscreteLinearGaussianSystem(A,B,Q),LinearGaussianSensor(C,D,R))
+end
+function predict(m::KalmanFilter,μ,Σ,u::T where T)
     """
         Prediction step in Kalman Filter
     """
@@ -89,7 +86,7 @@ function update!(m::KalmanFilter,z::T where T)
     m.μ,m.Σ = update(m,m.μ,m.Σ,z)
 end
 
-mutable struct EKF{n,m,p,F,G,T} <: Filter
+mutable struct ExtendedKalmanFilter{n,m,p,F,G,T} <: Filter
     μ::SVector{n,T} # mean vector
     Σ::SMatrix{n,n,T} # covariance matrix
     Q::SMatrix{n,n,Float64} # process noise
@@ -97,6 +94,7 @@ mutable struct EKF{n,m,p,F,G,T} <: Filter
     transition_model::F
     observation_model::G
 end
+const EKF = ExtendedKalmanFilter
 function predict(m::EKF,μ,Σ,u::T where T)
     At = state_jacobian(m.transition_model,μ)
     Q = m.Q
@@ -122,7 +120,7 @@ function update!(m::EKF,z::T where T)
     m.μ,m.Σ = update!(m,m.μ,m.Σ,z)
 end
 
-mutable struct UKF <: Filter
+mutable struct UnscentedKalmanFilter{n,m,p,F,G,T} <: Filter
     μ::SVector{n,T} # mean vector
     Σ::SMatrix{n,n,T} # covariance matrix
     Q::SMatrix{n,n,Float64} # process noise
@@ -132,6 +130,7 @@ mutable struct UKF <: Filter
     transition_model::F
     observation_model::G
 end
+const UKF = UnscentedKalmanFilter
 function unscented_transform(μ,Σ,λ,n)
     σ_pts = hcat([μ, μ+sqrtm(Σ), μ-sqrtm(Σ)]...)
     weights = ones(2*n+1) * 1.0 / (n + λ)
@@ -146,17 +145,27 @@ end
 function predict(m::UKF,μ,Σ,u::T where T)
     σ_pts, weights = unscented_transform(μ,Σ,m.λ,m.n)
     σ_pts = hcat([propagate(deterministic(m.transition_model),σ_pts[:,i],u) for i in 1:size(σ_pts,2)]...)
-    inverse_unscented_transform(σ_pts,weights)
+    (μ,Σ) = inverse_unscented_transform(σ_pts,weights)
+    Σ = Σ + m.Q
+    return μ,Σ
 end
 function update(m::UKF,μ,Σ,z::T where T)
     σ_pts, weights = unscented_transform(μ,Σ,m.λ,m.n)
     Z = hcat([observe(deterministic(m.observation_model),σ_pts[:,i]) for i in 1:size(σ_pts,2)]...)
     Ẑ = Z * weights
-    # TODO finish this section
+    W = diagm(weights)
+    Szz = (Ẑ .- z)*W*(Ẑ .- z) + m.R
+    Sxz = (σ_pts .- μ) * W * (Ẑ .- z)
+    Kt = Sxz*inv(Szz)
+
+    μ = Kt*(z .- Ẑ)
+    Σ = Σ - Kt*Szz*Kt'
+
+    return μ,Σ
 end
 
-mutable struct MultiHypothesisKalmanFilter <: Filter
-end
+# mutable struct MultiHypothesisKalmanFilter <: Filter
+# end
 
 
 
