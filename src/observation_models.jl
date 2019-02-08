@@ -9,12 +9,21 @@ export
     GaussianRangeSensor,
     BearingSensor,
     GaussianBearingSensor,
+    predict_obs,
     observe,
     measurement_jacobian
 
 abstract type ObservationModel end
 abstract type DeterministicObservationModel <: ObservationModel end
 abstract type ProbabilisticObservationModel <: ObservationModel end
+
+"""
+    deterministic(m::T where T <: ObservationModel)
+
+    returns a deterministic version of the sensor model
+"""
+deterministic(m::DeterministicObservationModel) = m
+# deterministic(m::ProbabilisticObservationModel) = throw(MethodError(deterministic, string("deterministic(m::",typeof(m),") not defined")))
 
 ## Observation Models
 struct LinearSensor <: ObservationModel
@@ -23,8 +32,10 @@ struct LinearSensor <: ObservationModel
 end
 input_size(m::LinearSensor) = size(m.C,2)
 observe(m::LinearSensor,x) = m.C*x
+predict_obs(m::LinearSensor,x) = m.C*x
 
 observe(m::LinearSensor,x,u) = m.C*x + m.D*u
+predict_obs(m::LinearSensor,x,u) = m.C*x + m.D*u
 measurement_jacobian(m::LinearSensor, x) = m.C
 struct LinearGaussianSensor <: ObservationModel
     C::Matrix{Float64}
@@ -33,8 +44,10 @@ struct LinearGaussianSensor <: ObservationModel
     m_noise::MultivariateNormal
 end
 LinearGaussianSensor(C,D,R) = LinearGaussianSensor(C,D,R,MultivariateNormal(zeros(size(C,1)),R))
+deterministic(m::LinearGaussianSensor) = LinearSensor(m.C,m.D)
 input_size(m::LinearGaussianSensor) = size(m.C,2)
 observe(m::LinearGaussianSensor,x) = m.C*x + rand(m.m_noise)
+predict_obs(m::LinearGaussianSensor,x) = m.C*x
 observe(m::LinearGaussianSensor,x,u) = m.C*x + m.D*u + rand(m.m_noise)
 measurement_jacobian(m::LinearGaussianSensor, x) = m.C + rand(m.m_noise)
 struct RangeSensor <: ObservationModel
@@ -49,6 +62,7 @@ struct GaussianRangeSensor <: ObservationModel
     R::Matrix{Float64}
     m_noise::MultivariateNormal
 end
+deterministic(m::GaussianRangeSensor) = RangeSensor(m.x)
 GaussianRangeSensor(x,R) = GaussianRangeSensor(x,R,MultivariateNormal(zeros(size(x)),R))
 input_size(m::GaussianRangeSensor) = size(m.x,1)
 observe(m::GaussianRangeSensor, x) = norm(x - m.x + rand(m.m_noise))
@@ -67,6 +81,7 @@ struct GaussianBearingSensor
     R::Matrix{Float64}
     m_noise::MultivariateNormal
 end
+deterministic(m::GaussianBearingSensor) = BearingSensor(m.x)
 GaussianBearingSensor(x,R) = GaussianBearingSensor(x,R,MultivariateNormal(zeros(size(x)),R))
 input_size(m::GaussianBearingSensor) = 2
 function observe(m::GaussianBearingSensor, x)
