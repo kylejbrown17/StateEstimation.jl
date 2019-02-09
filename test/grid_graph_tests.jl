@@ -1,5 +1,6 @@
 using LightGraphs, MetaGraphs
 using LinearAlgebra, StaticArrays, SparseArrays
+using NearestNeighbors
 using StateEstimation
 using Test
 
@@ -28,10 +29,17 @@ function generate_grid_graph(dx,dy)
     G
 end
 
+# G represents a 4-connected grid
 G = generate_grid_graph(4,4)
+pts = [[get_prop(G,v,:x),get_prop(G,v,:y)] for v in vertices(G)]
+μ = zeros(Int,nv(G))
+μ[1] = 1
+kdtree = KDTree()
 A = adjacency_matrix(G) + SparseMatrixCSC{Int}(I,nv(G),nv(G))
 x = zeros(Int,nv(G))
 x[1] = 1
 while sum(x) < nv(G)
     @show x = Vector{Int}(A*x .>= 1)
 end
+
+BinaryDiscreteFilter()
