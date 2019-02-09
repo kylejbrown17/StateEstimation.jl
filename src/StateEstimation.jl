@@ -5,6 +5,7 @@ using Distributions
 using Parameters
 using StaticArrays
 using NearestNeighbors
+using LightGraphs, MetaGraphs
 
 export
     Filter,
@@ -200,6 +201,12 @@ function predict!(m::BinaryDiscreteFilter,μ)
 end
 function update(m::BinaryDiscreteFilter,μ,z)
     """
+    TODO: Measurement vector z:
+        z[i] = {
+                -1      if pts[i] is observed to be empty,
+                0       if pts[i] not observed,
+                1       if pts[i] observed to contain target
+                    }
         z is a point estimate of the target location in R²
     """
     idxs, dists = get_neighbors(m.kdtree, z, m.n)
