@@ -32,9 +32,9 @@ function deterministic(m)
     error(string("deterministic(m::",typeof(m),") not implemented for "))
 end
 
-mutable struct KalmanFilter{N,T} <: Filter
-    μ::SVector{N,T} # μ::SVector{n,T} # mean vector
-    Σ::SMatrix{N,N,T} # Σ::SMatrix{n,n,T} covariance matrix
+mutable struct KalmanFilter{N,T <: Real,V <: StaticArray{Tuple{N},T,1}, W <: SMatrix{N,N,T}} <: Filter
+    μ::V # μ::SVector{n,T} # mean vector
+    Σ::W # Σ::SMatrix{n,n,T} covariance matrix
     # A::SMatrix{n,n,T}
     # B::SMatrix{n,m,T}
     # C::SMatrix{p,n,T}
@@ -45,7 +45,11 @@ mutable struct KalmanFilter{N,T} <: Filter
     observation_model::LinearGaussianSensor
 end
 const KF = KalmanFilter
-function KalmanFilter(μ::MatrixLike,Σ::MatrixLike,sysF::TransitionModel,sysG::ObservationModel)
+function KalmanFilter(μ::StaticArray,Σ::MatrixLike,sysF,sysG)
+    n = size(μ,1)
+    KalmanFilter(μ,SMatrix{n,n}(Σ),sysF,sysG)
+end
+function KalmanFilter(μ::MatrixLike,Σ::MatrixLike,sysF,sysG)
     n = size(μ,1)
     KalmanFilter(SVector{n}(μ),SMatrix{n,n}(Σ),sysF,sysG)
 end
@@ -87,15 +91,20 @@ function update!(m::KalmanFilter,z)
     m.μ,m.Σ = update(m,m.μ,m.Σ,z)
 end
 
-mutable struct ExtendedKalmanFilter{N,P,F,G,T} <: Filter
-    μ::SVector{N,T} # mean vector
-    Σ::SMatrix{N,N,T} # covariance matrix
+mutable struct ExtendedKalmanFilter{N,P,T <: Real,V <: StaticArray{Tuple{N},T,1}, W <: SMatrix{N,N,T}, F,G} <: Filter
+    μ::V # mean vector
+    Σ::W # covariance matrix
     Q::SMatrix{N,N,Float64} # process noise
     R::SMatrix{P,P,Float64} # measurement noise
     transition_model::F
     observation_model::G
 end
-function ExtendedKalmanFilter(μ::MatrixLike,Σ::MatrixLike,Q::MatrixLike,R::MatrixLike,sysF,sysG)
+function ExtendedKalmanFilter(μ::StaticArray,Σ::MatrixLike,Q,R,sysF,sysG)
+    n = size(μ,1)
+    p = size(Q,1)
+    EKF(μ,SMatrix{n,n}(Σ),SMatrix{n,n}(Q),SMatrix{p,p}(R),sysF,sysG)
+end
+function ExtendedKalmanFilter(μ::MatrixLike,Σ::MatrixLike,Q,R,sysF,sysG)
     n = size(μ,1)
     p = size(Q,1)
     EKF(SVector{n}(μ),SMatrix{n,n}(Σ),SMatrix{n,n}(Q),SMatrix{p,p}(R),sysF,sysG)
@@ -127,17 +136,24 @@ function update!(m::EKF,z)
     m.μ,m.Σ = update(m,m.μ,m.Σ,z)
 end
 
-mutable struct UnscentedKalmanFilter{n,p,F,G,T} <: Filter
-    μ::SVector{n,T} # mean vector
-    Σ::SMatrix{n,n,T} # covariance matrix
-    Q::SMatrix{n,n,Float64} # process noise
-    R::SMatrix{p,p,Float64} # measurement noise
+mutable struct UnscentedKalmanFilter{N,P,T <: Real,V <: StaticArray{Tuple{N},T,1},F,G} <: Filter
+    μ::V # mean vector
+    Σ::SMatrix{N,N,T} # covariance matrix
+    Q::SMatrix{N,N,Float64} # process noise
+    R::SMatrix{P,P,Float64} # measurement noise
     λ::Float64
     n::Int
     transition_model::F
     observation_model::G
 end
 const UKF = UnscentedKalmanFilter
+function UnscentedKalmanFilter(
+    μ::StaticArray,Σ::MatrixLike,Q::MatrixLike,R::MatrixLike,λ,n,
+    sysF::TransitionModel,sysG::ObservationModel)
+    N = size(μ,1)
+    P = size(R,1)
+    UKF(μ,SMatrix{N,N}(Σ),SMatrix{N,N}(Q),SMatrix{P,P}(R),float(λ),n,sysF,sysG)
+end
 function UnscentedKalmanFilter(
     μ::MatrixLike,Σ::MatrixLike,Q::MatrixLike,R::MatrixLike,λ,n,
     sysF::TransitionModel,sysG::ObservationModel)
@@ -146,21 +162,29 @@ function UnscentedKalmanFilter(
     UKF(SVector{N}(μ),SMatrix{N,N}(Σ),SMatrix{N,N}(Q),SMatrix{P,P}(R),float(λ),n,sysF,sysG)
 end
 function unscented_transform(μ,Σ,λ,n)
-    σ_pts = hcat([μ, μ.+sqrt(Σ), μ.-sqrt(Σ)]...)
+    # μv = SVector(μ) # convert to SVector for case of
+    Δ = hcat([zeros(length(μ)),sqrt(Σ),-sqrt(Σ)]...)
+    # σ_pts = hcat([μv, μv.+sqrt(Σ), μv.-sqrt(Σ)]...)
+    σ_pts = [μ + Δ[:,i] for i in 1:size(Δ,2)]
     weights = ones(2*n+1) * 1.0 / (n + λ)
     weights[1] *= 2
     return σ_pts, weights
 end
 function inverse_unscented_transform(σ_pts,weights)
-    μ = σ_pts * weights
-    Δ = σ_pts .- μ
-    Σ = Δ * diagm((0=>weights)) * Δ'
+    # μ = σ_pts * weights
+    μ = sum(σ_pts .* weights)
+    # Δ = σ_pts .- μ
+    # Σ = Δ * diagm((0=>weights)) * Δ'
+    Σ = sum([w*(pt-μ)*(pt-μ)' for (pt,w) in zip(σ_pts,weights)])
+
     return μ,Σ
 end
 function predict(m::UKF,μ,Σ,u)
+    μ_type = typeof(μ)
     σ_pts, weights = unscented_transform(μ,Σ,m.λ,m.n)
-    σ_pts = hcat([propagate(deterministic(m.transition_model),σ_pts[:,i],u) for i in 1:size(σ_pts,2)]...)
+    σ_pts = [propagate(deterministic(m.transition_model),pt,u) for pt in σ_pts]
     (μ,Σ) = inverse_unscented_transform(σ_pts,weights)
+    μ = convert(μ_type,μ)
     Σ = Σ + m.Q
     return μ,Σ
 end
@@ -169,11 +193,11 @@ function predict!(m::UKF,u)
 end
 function update(m::UKF,μ,Σ,z)
     σ_pts, weights = unscented_transform(μ,Σ,m.λ,m.n)
-    Z = hcat([observe(deterministic(m.observation_model),σ_pts[:,i]) for i in 1:size(σ_pts,2)]...)
+    Z = hcat([observe(deterministic(m.observation_model),pt) for pt in σ_pts]...)
     ẑ = Z * weights
     W = diagm((0=>weights))
     Szz = (Z .- z)*W*(Z .- z)' + m.R
-    Sxz = (σ_pts .- μ) * W * (Z .- z)'
+    Sxz = (hcat(σ_pts...) .- μ) * W * (Z .- z)'
     Kt = Sxz*inv(Szz)
 
     μ = μ + Kt*(z .- ẑ)

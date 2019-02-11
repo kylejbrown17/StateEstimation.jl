@@ -159,41 +159,41 @@ end
 observe(m::GaussianBearingSensor, x, u) = observe(m, x)
 measurement_jacobian(m::GaussianBearingSensor, x) = SMatrix{2,2}(([0.0 1.0;-1.0 0.0]*x)*([0.0 1.0;-1.0 0.0]*x)') * norm(x)^-3
 
-mutable struct NodeObservationModel{N,V}
-    # G::MetaGraph        # graph
-    pts::Vector{V}      # vector of points corresponding to graph nodes
-    kdtree::KDTree      # kdtree for lookup
-    x::SVector{N}       # position of sensor
-    r::Float64          # sensor range
-    k::Int              # num neighbors for knn query
-end
-function NodeObservationModel(pts::Vector,x,r::Float64=Inf,k::Int=4)
-    NodeObservationModel(pts,KDTree(hcat(pts...)),x,r,k)
-end
-function set_position!(m::NodeObservationModel,x)
-    m.x = x
-end
-get_range(m::NodeObservationModel) = m.r
-in_range(m::NodeObservationModel,x) = norm(x-m.x) < get_range(m)
-function observe(m::NodeObservationModel,x)
-    z = zeros(Int,length(pts))
-    if in_range(m,x)
-        idxs = inrange(m.kdtree, x)
-        z[idxs] = -1
-        idxs, dists = knn(m.kdtree, x, m.n)
-        z[idxs] = 1
-    end
-    return z
-end
-
-mutable struct GraphObservationModel
-    G::MetaGraph    # Graph
-    D::Matrix       # Distance matrix
-    x::Int          # index of sensor location
-end
-function set_position!(m::GraphObservationModel,x)
-    m.x = x
-end
+# mutable struct NodeObservationModel{N,V}
+#     # G::MetaGraph        # graph
+#     pts::Vector{V}      # vector of points corresponding to graph nodes
+#     kdtree::KDTree      # kdtree for lookup
+#     x::SVector{N}       # position of sensor
+#     r::Float64          # sensor range
+#     k::Int              # num neighbors for knn query
+# end
+# function NodeObservationModel(pts::Vector,x,r::Float64=Inf,k::Int=4)
+#     NodeObservationModel(pts,KDTree(hcat(pts...)),x,r,k)
+# end
+# function set_position!(m::NodeObservationModel,x)
+#     m.x = x
+# end
+# get_range(m::NodeObservationModel) = m.r
+# in_range(m::NodeObservationModel,x) = norm(x-m.x) < get_range(m)
+# function observe(m::NodeObservationModel,x)
+#     z = zeros(Int,length(pts))
+#     if in_range(m,x)
+#         idxs = inrange(m.kdtree, x)
+#         z[idxs] = -1
+#         idxs, dists = knn(m.kdtree, x, m.n)
+#         z[idxs] = 1
+#     end
+#     return z
+# end
+#
+# mutable struct GraphObservationModel
+#     G::MetaGraph    # Graph
+#     D::Matrix       # Distance matrix
+#     x::Int          # index of sensor location
+# end
+# function set_position!(m::GraphObservationModel,x)
+#     m.x = x
+# end
 
 # composite sensor models
 struct CompositeSensorModel{T}
