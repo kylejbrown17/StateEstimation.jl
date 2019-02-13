@@ -2,6 +2,8 @@ export
     TransitionModel,
     DynamicSystem,
     DiscreteLinearSystem,
+    single_integrator_2D,
+    double_integrator_2D,
     DiscreteLinearGaussianSystem,
     BinaryReachabilityTransitionModel,
     propagate,
@@ -19,10 +21,6 @@ mutable struct DynamicSystem{T,F}
     transition_model::F # state transition_model model
 end
 deterministic(m::DynamicSystem) = DynamicSystem(x,deterministic(m.transition_model))
-# predict(sys,u) = predict(sys.transition_model,sys.x,u)
-# function predict!(sys,u)
-#     sys.x = predict(sys,u)
-# end
 
 mutable struct DiscreteLinearSystem{n,m,T} <: DeterministicTransitionModel
     # x::SVector{n,T} # state
@@ -34,25 +32,57 @@ function DiscreteLinearSystem(A::MatrixLike,B::MatrixLike)
     m = size(B,2)
     DiscreteLinearSystem(SMatrix{n,n}(A),SMatrix{n,m}(B))
 end
-# function DiscreteLinearSystem(A::Matrix,B::Vector)
-#     n = size(A,1)
-#     m = 1
-#     DiscreteLinearSystem(SMatrix{n,n}(A),SMatrix{n,m}(B))
-# end
-# function predict(sys::DiscreteLinearSystem,x,u)
-#     sys.A*x + sys.B*u
-# end
 function propagate(sys::DiscreteLinearSystem,x,u)
     sys.A*x + sys.B*u
 end
-# function propagate!(sys::DiscreteLinearSystem,u)
-#     sys.x = propagate(sys,sys.x,u)
-# end
 function state_jacobian(sys::DiscreteLinearSystem,x)
     sys.A
 end
 function state_jacobian(sys::DiscreteLinearSystem)
     sys.A
+end
+
+function single_integrator_1D(dt::Float64)
+    A = [1.0]
+    B = dt * [1.0]
+    DiscreteLinearSystem(A,B)
+end
+function single_integrator_2D(dt::Float64)
+    A = [
+        1.0 0.0;
+        0.0 1.0
+    ]
+    B = dt * [
+        1.0 0.0;
+        0.0 1.0
+    ]
+    DiscreteLinearSystem(A,B)
+end
+function double_integrator_1D(dt::Float64)
+    A = [
+        1.0 0.0;
+        0.0 1.0;
+    ]
+    B = [
+        .5*dt^2 0.0;
+        0.0     dt;
+    ]
+    DiscreteLinearSystem(A,B)
+end
+function double_integrator_2D(dt::Float64)
+    A = [
+        1.0 0.0 dt 0.0;
+        0.0 1.0 0.0 dt;
+        0.0 0.0 1.0 0.0;
+        0.0 0.0 0.0 1.0
+    ]
+    B = [
+        .5*dt^2 0.0;
+        0.0     .5*dt^2;
+        dt      0.0;
+        0.0     dt;
+    ]
+    DiscreteLinearSystem(A,B)
 end
 
 mutable struct DiscreteLinearGaussianSystem{n,m,T} <: ProbabilisticTransitionModel
@@ -74,25 +104,13 @@ function DiscreteLinearGaussianSystem(A::MatrixLike,B::MatrixLike,Q::MatrixLike)
         SMatrix{n,m}(B),
         SMatrix{n,n}(Q))
 end
-# DiscreteLinearGaussianSystem(A::Matrix,B::Vector,Q::Matrix) = DiscreteLinearGaussianSystem(A,Matrix{length(B),1}(B),Q)
-# function DiscreteLinearGaussianSystem(A::Matrix,B::Vector,Q::Matrix)
-#     n = size(A,1)
-#     m = 1
-#     DiscreteLinearGaussianSystem(
-#         SMatrix{n,n}(A),
-#         SMatrix{n,m}(B),
-#         SMatrix{n,n}(Q),
-#         MultivariateNormal(zeros(n),Q))
-# end
-# function predict(sys::DiscreteLinearGaussianSystem,x,u)
-#     sys.A*x + sys.B*u
-# end
+function DiscreteLinearGaussianSystem(sys::DiscreteLinearSystem,Q::SMatrix)
+    return DiscreteLinearGaussianSystem(sys.A,sys.B,Q)
+end
+
 function propagate(sys::DiscreteLinearGaussianSystem,x,u)
     sys.A*x + sys.B*u + rand(sys.proc_noise)
 end
-# function propagate!(sys::DiscreteLinearGaussianSystem,u)
-#     sys.x = propagate(sys,sys.x,u)
-# end
 function state_jacobian(sys::DiscreteLinearGaussianSystem,x)
     state_jacobian(sys)
 end
@@ -100,7 +118,10 @@ function state_jacobian(sys::DiscreteLinearGaussianSystem)
     sys.A
 end
 
-mutable struct BinaryReachabilityTransitionModel{N} <: DeterministicTransitionModel
-    A::SMatrix{N,N,Bool}
+# mutable struct BinaryReachabilityTransitionModel{N} <: DeterministicTransitionModel
+#     A::SMatrix{N,N,Bool}
+# end
+mutable struct BinaryReachabilityTransitionModel{T <: AbstractMatrix{Int}} <: DeterministicTransitionModel
+    A::T
 end
-propagate(sys::BinaryReachabilityTransitionModel,x,u) = A*x
+propagate(sys::BinaryReachabilityTransitionModel,x,u) = typeof(x)(sys.A*x .> 0)

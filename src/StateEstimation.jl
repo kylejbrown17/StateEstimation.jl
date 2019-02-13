@@ -35,12 +35,6 @@ end
 mutable struct KalmanFilter{N,T <: Real,V <: StaticArray{Tuple{N},T,1}, W <: SMatrix{N,N,T}} <: Filter
     μ::V # μ::SVector{n,T} # mean vector
     Σ::W # Σ::SMatrix{n,n,T} covariance matrix
-    # A::SMatrix{n,n,T}
-    # B::SMatrix{n,m,T}
-    # C::SMatrix{p,n,T}
-    # D::SMatrix{p,m,T}
-    # Q::SMatrix{n,n,Float64}
-    # R::SMatrix{p,p,Float64}
     transition_model::DiscreteLinearGaussianSystem
     observation_model::LinearGaussianSensor
 end
@@ -148,26 +142,25 @@ mutable struct UnscentedKalmanFilter{N,P,T <: Real,V <: StaticArray{Tuple{N},T,1
 end
 const UKF = UnscentedKalmanFilter
 function UnscentedKalmanFilter(
-    μ::StaticArray,Σ::MatrixLike,Q::MatrixLike,R::MatrixLike,λ,n,
-    sysF::TransitionModel,sysG::ObservationModel)
+    μ::StaticArray,Σ::MatrixLike,Q::MatrixLike,R::MatrixLike,λ,n,sysF,sysG)
     N = size(μ,1)
     P = size(R,1)
     UKF(μ,SMatrix{N,N}(Σ),SMatrix{N,N}(Q),SMatrix{P,P}(R),float(λ),n,sysF,sysG)
 end
 function UnscentedKalmanFilter(
-    μ::MatrixLike,Σ::MatrixLike,Q::MatrixLike,R::MatrixLike,λ,n,
-    sysF::TransitionModel,sysG::ObservationModel)
+    μ::MatrixLike,Σ::MatrixLike,Q::MatrixLike,R::MatrixLike,λ,n,sysF,sysG)
     N = size(μ,1)
     P = size(R,1)
     UKF(SVector{N}(μ),SMatrix{N,N}(Σ),SMatrix{N,N}(Q),SMatrix{P,P}(R),float(λ),n,sysF,sysG)
 end
 function unscented_transform(μ,Σ,λ,n)
     # μv = SVector(μ) # convert to SVector for case of
-    Δ = hcat([zeros(length(μ)),sqrt(Σ),-sqrt(Σ)]...)
+    Δ = hcat([zeros(length(μ)),sqrt((n+λ)*Σ),-sqrt((n+λ)*Σ)]...)
     # σ_pts = hcat([μv, μv.+sqrt(Σ), μv.-sqrt(Σ)]...)
     σ_pts = [μ + Δ[:,i] for i in 1:size(Δ,2)]
-    weights = ones(2*n+1) * 1.0 / (n + λ)
-    weights[1] *= 2
+    weights = ones(2*n+1) * 1.0 / (2*(n + λ))
+    weights[1] = λ / (n + λ)
+    # weights = weights / sum(weights)
     return σ_pts, weights
 end
 function inverse_unscented_transform(σ_pts,weights)
@@ -209,19 +202,35 @@ function update!(m::UKF,u)
     m.μ,m.Σ = update(m,m.μ,m.Σ,u)
 end
 
-mutable struct BinaryDiscreteFilter{N,V,F,G} <: Filter
+mutable struct BinaryDiscreteFilter{N,V,T,G} <: Filter
     pts                 ::SVector{N,V} # distribution over possible locations of target
-    μ                   ::SVector{N,Bool} # hypothesis
+    μ                   ::SVector{N,Int} # hypothesis
     kdtree              ::NearestNeighbors.KDTree
-    n                   ::Int
-    transition_model    ::BinaryReachabilityTransitionModel
+    k                   ::Int
+    transition_model    ::BinaryReachabilityTransitionModel{T}
     observation_model   ::G
 end
-function predict(m::BinaryDiscreteFilter,μ)
-    propagate(m.transition_model,μ)
+function BinaryDiscreteFilter(pts::MatrixLike,μ::MatrixLike,kdtree,k,sysF,sysG)
+    N = length(pts)
+    BinaryDiscreteFilter(
+        SVector{size(pts,1)}(pts),SVector{size(μ,1)}(μ),kdtree,k,sysF,sysG)
 end
-function predict!(m::BinaryDiscreteFilter,μ)
-    m.μ = predict(m,μ)
+# function BinaryDiscreteFilter(pts,k=4,transition_model,observation_model)
+#     N = size(pts,1)
+#     BinaryDiscreteFilter(
+#         pts,
+#         SVector{N,Bool}(zeros(N)),
+#         KDTree(pts),
+#         k,
+#         transition_model,
+#         observation_model
+#     )
+# end
+function predict(m::BinaryDiscreteFilter,μ,u)
+    propagate(m.transition_model,μ,u)
+end
+function predict!(m::BinaryDiscreteFilter,u)
+    m.μ = predict(m,m.μ,u)
 end
 function update(m::BinaryDiscreteFilter,μ,z)
     """
@@ -233,22 +242,27 @@ function update(m::BinaryDiscreteFilter,μ,z)
                     }
         z is a point estimate of the target location in R²
     """
-    idxs, dists = get_neighbors(m.kdtree, z, m.n)
+    idxs, dists = knn(m.kdtree, z, m.k)
     N = size(μ,1)
-    SVector{size(μ,1),Bool}([(i ∈ idxs) for i in 1:N])
+    SVector{size(μ,1),Int}([(i ∈ idxs) for i in 1:N])
 end
 function update!(m::BinaryDiscreteFilter,z)
     m.μ = update(m,m.μ,z)
 end
+
+# mutable struct HistogramFilter{N,V,F,G} <: Filter
+#     pts                 ::SVector{N,V} # distribution over possible locations of target
+#     μ                   ::SVector{N,Bool} # hypothesis
+#     kdtree              ::NearestNeighbors.KDTree
+#     n                   ::Int
+#     transition_model    ::BinaryReachabilityTransitionModel
+#     observation_model   ::G
+# end
 # mutable struct MultiHypothesisFilter{F} <: Filter
 #     weights::Vector{Float64}
 #     filters::Vector{F}
 # end
 # const MHF = MultiHypothesisFilter
-
-
-
-
 
 
 end # module

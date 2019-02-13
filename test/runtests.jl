@@ -2,6 +2,8 @@ using Test
 using StateEstimation
 using LinearAlgebra
 using StaticArrays
+using LinearAlgebra, StaticArrays, SparseArrays
+using LightGraphs, MetaGraphs
 using Vec
 
 # function StaticArrays.similar_type(::Type{V}, ::Type{F}, size::Size{N}) where {V<:VecE, F<:AbstractFloat, N <: Tuple}
@@ -11,6 +13,8 @@ using Vec
 #         return SArray{N,F,length(size),prod(size)}
 #     end
 # end
+
+include("grid_graph_tests.jl")
 
 # Transtion Models
 x = [0.0;1.0]
@@ -123,7 +127,9 @@ update!(m,observe(m.observation_model,x))
 
 m = UKF(VecE2(μ₀),Σ₀,Q,R,2,2,sysF,sysG)
 σ_pts, weights = unscented_transform(m.μ,m.Σ,m.λ,m.n)
-inverse_unscented_transform(σ_pts,weights)
+(μᵖ,Σᵖ) = inverse_unscented_transform(σ_pts,weights)
+@test norm(m.μ - μᵖ) < 0.000000001
+@test norm(m.Σ - Σᵖ) < 0.000000001
 @test typeof(predict(m,m.μ,m.Σ,u)[1]) <: VecE2
 update(m,m.μ,m.Σ,observe(deterministic(m.observation_model),x))
 predict!(m,u)

@@ -4,6 +4,7 @@ export
     ProbabilisticObservationModel,
 
     LinearSensor,
+    identity_sensor,
     LinearGaussianSensor,
     RangeSensor,
     GaussianRangeSensor,
@@ -63,12 +64,13 @@ struct LinearGaussianSensor{N,M,P,T} <: ObservationModel
     R::SMatrix{P,P,Float64}
     m_noise::MultivariateNormal
 end
-LinearGaussianSensor(C::SMatrix,D::SMatrix,R::SMatrix) = LinearGaussianSensor(C,D,R,MultivariateNormal(zeros(size(C,1)),Matrix(R)))
-function LinearGaussianSensor(C::MatrixLike,D::MatrixLike,R::MatrixLike)
+LinearGaussianSensor(C::SMatrix,D::SMatrix,R) = LinearGaussianSensor(C,D,SMatrix{size(R)...}(R),MultivariateNormal(zeros(size(C,1)),Matrix(R)))
+LinearGaussianSensor(sys::LinearSensor,R) = LinearGaussianSensor(sys.C,sys.D,R)
+function LinearGaussianSensor(C::MatrixLike,D::MatrixLike,R)
     p = size(C,1)
     n = size(C,2)
     m = size(D,2)
-    LinearGaussianSensor(SMatrix{p,n}(C),SMatrix{p,m}(D),SMatrix{p,p}(R))
+    LinearGaussianSensor(SMatrix{p,n}(C),SMatrix{p,m}(D),R)
 end
 deterministic(m::LinearGaussianSensor) = LinearSensor(m.C,m.D)
 input_size(m::LinearGaussianSensor) = size(m.C,2)
@@ -159,6 +161,22 @@ end
 observe(m::GaussianBearingSensor, x, u) = observe(m, x)
 measurement_jacobian(m::GaussianBearingSensor, x) = SMatrix{2,2}(([0.0 1.0;-1.0 0.0]*x)*([0.0 1.0;-1.0 0.0]*x)') * norm(x)^-3
 
+# struct DiscreteGraphSensor
+#     """
+#     all nodes in neighbors(G,x) are observable to DiscreteGraphSensor
+#     """
+#     pts                 ::SVector{N,V} # distribution over possible locations of target
+#     kdtree              ::NearestNeighbors.KDTree
+#     k                   ::Int           # number of nearest neighbors to hit
+#     G                   ::MetaGraph
+#     x                   ::Int
+# end
+# function observe(m:::DiscreteGraphSensor, x)
+#     idxs, dists = get_neighbors(m.kdtree, x, m.k)
+#     hits = intersect(neighbors(m.G,m.x),idxs) # return intersection of visible nodes and nodes in x
+#     
+# end
+# observe(m::DiscreteGraphSensor, x, u) = observe(m, x)
 # mutable struct NodeObservationModel{N,V}
 #     # G::MetaGraph        # graph
 #     pts::Vector{V}      # vector of points corresponding to graph nodes
