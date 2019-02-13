@@ -54,9 +54,9 @@ function predict(m::KalmanFilter,μ,Σ,u)
     """
         Prediction step in Kalman Filter
     """
-    A = m.transition_model.A
-    B = m.transition_model.B
-    Q = m.transition_model.Q
+    A = m.transition_model.A # state jacobian
+    B = m.transition_model.B # control jacobian
+    Q = m.transition_model.Q # process noise covariance
 
     μ = A*μ + B*u
     Σ = A*Σ*A' + Q
@@ -70,9 +70,9 @@ function predict!(m::KalmanFilter,u)
     m.μ,m.Σ = predict(m,m.μ,m.Σ,u)
 end
 function update(m::KalmanFilter,μ,Σ,z)
-    C = m.observation_model.C
-    D = m.observation_model.D
-    R = m.observation_model.R
+    C = m.observation_model.sensor.C # measurement state jacobian
+    D = m.observation_model.sensor.D # measurement control jacobian
+    R = m.observation_model.R # measurement noise covariance
 
     Kt = Σ*C'*inv(C*Σ*C' + R)
 
