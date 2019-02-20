@@ -6,6 +6,8 @@ using Parameters
 using StaticArrays
 using NearestNeighbors
 using LightGraphs, MetaGraphs
+using DecisionMaking
+using CoordinateTransformations, Rotations
 
 export
     Filter,
@@ -205,16 +207,19 @@ end
 mutable struct BinaryDiscreteFilter{N,V,T,G} <: Filter
     pts                 ::SVector{N,V} # distribution over possible locations of target
     μ                   ::SVector{N,Int} # hypothesis
-    kdtree              ::NearestNeighbors.KDTree
-    k                   ::Int
+    # kdtree              ::NearestNeighbors.KDTree
+    # k                   ::Int
     transition_model    ::BinaryReachabilityTransitionModel{T}
     observation_model   ::G
 end
-function BinaryDiscreteFilter(pts::MatrixLike,μ::MatrixLike,kdtree,k,sysF,sysG)
-    N = length(pts)
-    BinaryDiscreteFilter(
-        SVector{size(pts,1)}(pts),SVector{size(μ,1)}(μ),kdtree,k,sysF,sysG)
+function BinaryDiscreteFilter(pts::MatrixLike,μ::MatrixLike,sysF,sysG)
+    BinaryDiscreteFilter(SVector{size(pts,1)}(pts),SVector{size(μ,1)}(μ),sysF,sysG)
 end
+# function BinaryDiscreteFilter(pts::MatrixLike,μ::MatrixLike,kdtree,k,sysF,sysG)
+#     N = length(pts)
+#     BinaryDiscreteFilter(
+#         SVector{size(pts,1)}(pts),SVector{size(μ,1)}(μ),kdtree,k,sysF,sysG)
+# end
 # function BinaryDiscreteFilter(pts,k=4,transition_model,observation_model)
 #     N = size(pts,1)
 #     BinaryDiscreteFilter(
@@ -242,9 +247,12 @@ function update(m::BinaryDiscreteFilter,μ,z)
                     }
         z is a point estimate of the target location in R²
     """
-    idxs, dists = knn(m.kdtree, z, m.k)
-    N = size(μ,1)
-    SVector{size(μ,1),Int}([(i ∈ idxs) for i in 1:N])
+    # idxs, dists = knn(m.kdtree, z, m.k)
+    # N = size(μ,1)
+    # SVector{size(μ,1),Int}([(i ∈ idxs) for i in 1:N])
+    h = μ .* measurement_likelihood(m.observation_model, μ, z)
+    h = h ./ sum(h)
+    μ = SVector{size(μ,1),Int}(h .> 0)
 end
 function update!(m::BinaryDiscreteFilter,z)
     m.μ = update(m,m.μ,z)

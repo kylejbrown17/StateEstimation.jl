@@ -1,5 +1,4 @@
 export
-    TransitionModel,
     DynamicSystem,
     DiscreteLinearSystem,
     single_integrator_2D,
@@ -10,9 +9,9 @@ export
     # propagate!,
     state_jacobian
 
-abstract type TransitionModel end
-abstract type DeterministicTransitionModel <: TransitionModel end
-abstract type ProbabilisticTransitionModel <: TransitionModel end
+# abstract type TransitionModel end
+abstract type DeterministicTransitionModel <: StateTransitionModel end
+abstract type ProbabilisticTransitionModel <: StateTransitionModel end
 deterministic(m::DeterministicTransitionModel) = m
 # deterministic(m::ProbabilisticTransitionModel) = throw(deterministic, string("deterministic(m::",typeof(m),"not defined)"))
 

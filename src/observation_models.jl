@@ -3,6 +3,7 @@ export
     DeterministicObservationModel,
     ProbabilisticObservationModel,
 
+    MobileSensor,
     LinearSensor,
     identity_sensor,
     LinearGaussianSensor,
@@ -12,12 +13,13 @@ export
     GaussianBearingSensor,
     AdditiveGaussianSensor,
     BoundedSensor,
+    CompositeSensorModel,
     observe,
     in_range,
     input_size,
     measurement_jacobian
 
-abstract type ObservationModel end
+# abstract type ObservationModel end
 abstract type DeterministicObservationModel <: ObservationModel end
 abstract type ProbabilisticObservationModel <: ObservationModel end
 abstract type DiscreteObservationModel <: ObservationModel end
@@ -28,9 +30,14 @@ abstract type DiscreteObservationModel <: ObservationModel end
     returns a deterministic version of the sensor model
 """
 deterministic(m::DeterministicObservationModel) = m
-# deterministic(m::ProbabilisticObservationModel) = throw(MethodError(deterministic, string("deterministic(m::",typeof(m),") not defined")))
 get_range(m::ObservationModel) = Inf
 in_range(m::ObservationModel,x) = true
+
+mutable struct MobileSensor{S,T<:Transformation}
+    sensor::S
+    transform::T # transform from sensor frame to global frame
+end
+input_size(m::MobileSensor) = input_size(m.sensor)
 
 ## Observation Models
 struct LinearSensor{N,M,P,T} <: DeterministicObservationModel
@@ -54,27 +61,7 @@ observe(m::LinearSensor,x) = m.C*x
 observe(m::LinearSensor,x,u) = m.C*x + m.D*u
 measurement_jacobian(m::LinearSensor, x) = m.C
 
-# struct LinearGaussianSensor{N,M,P,T} <: ProbabilisticObservationModel
-#     C::SMatrix{P,N,T}
-#     D::SMatrix{P,M,T}
-#     R::SMatrix{P,P,Float64}
-#     m_noise::MultivariateNormal
-# end
-# LinearGaussianSensor(C::SMatrix,D::SMatrix,R) = LinearGaussianSensor(C,D,SMatrix{size(R)...}(R),MultivariateNormal(zeros(size(C,1)),Matrix(R)))
-# LinearGaussianSensor(sys::LinearSensor,R) = LinearGaussianSensor(sys.C,sys.D,R)
-# function LinearGaussianSensor(C::MatrixLike,D::MatrixLike,R)
-#     p = size(C,1)
-#     n = size(C,2)
-#     m = size(D,2)
-#     LinearGaussianSensor(SMatrix{p,n}(C),SMatrix{p,m}(D),R)
-# end
-# deterministic(m::LinearGaussianSensor) = LinearSensor(m.C,m.D)
-# input_size(m::LinearGaussianSensor) = size(m.C,2)
-# observe(m::LinearGaussianSensor,x) = m.C*x + rand(m.m_noise)
-# observe(m::LinearGaussianSensor,x,u) = m.C*x + m.D*u + rand(m.m_noise)
-# measurement_jacobian(m::LinearGaussianSensor, x) = m.C
-
-struct RangeSensor{N,T} <: DeterministicObservationModel
+mutable struct RangeSensor{N,T} <: DeterministicObservationModel
     x::SVector{N,T}     # sensor origin
     r::Float64          # maximum sensor range
 end
@@ -96,7 +83,7 @@ function measurement_jacobian(m::RangeSensor, x)
     end
 end
 
-struct GaussianRangeSensor{N} <: ProbabilisticObservationModel
+mutable struct GaussianRangeSensor{N} <: ProbabilisticObservationModel
     x::SVector{N,Float64} # sensor origin
     R::SMatrix{N,N,Float64}
     m_noise::MultivariateNormal
@@ -122,8 +109,7 @@ observe(m::GaussianRangeSensor, x) = norm(x - m.x + rand(m.m_noise))
 observe(m::GaussianRangeSensor, x, u) = observe(m, x)
 measurement_jacobian(m::GaussianRangeSensor, x) = (x - m.x) / norm(x - m.x)
 
-
-struct BearingSensor <: DeterministicObservationModel
+mutable struct BearingSensor <: DeterministicObservationModel
     x::SVector{2,Float64}
 end
 BearingSensor(x::MatrixLike) = BearingSensor(SVector{size(x,1)}(x))
@@ -131,9 +117,9 @@ input_size(m::BearingSensor) = 2
 observe(m::BearingSensor, x) = (x - m.x) / norm(x - m.x)
 observe(m::BearingSensor, x, u) = observe(m, x)
 # measurement_jacobian(m::BearingSensor, x) = ([0.0 1.0;-1.0 0.0]*x)*([0.0 1.0;-1.0 0.0]*x)' * norm(x)^-3
-measurement_jacobian(m::BearingSensor, x) = [x[2]^2 -x[1]*x[2]; -x[2]*x[1] x[1]^2] / (norm(x)^3)
+measurement_jacobian(m::BearingSensor, x) = SMatrix{2,2}([x[2]^2 -x[1]*x[2]; -x[2]*x[1] x[1]^2]) / (norm(x)^3)
 
-struct GaussianBearingSensor <: ProbabilisticObservationModel
+mutable struct GaussianBearingSensor <: ProbabilisticObservationModel
     x::SVector{2,Float64}
     R::SMatrix{2,2,Float64}
     m_noise::MultivariateNormal
@@ -203,15 +189,6 @@ measurement_jacobian(m::GaussianBearingSensor, x) = SMatrix{2,2}(([0.0 1.0;-1.0 
 #     m.x = x
 # end
 
-# composite sensor models
-struct CompositeSensorModel{T}
-    models::T
-    input_size::Int
-end
-deterministic(m::CompositeSensorModel) = CompositeSensorModel(Tuple([deterministic(s for s in m.models)]...),m.input_size)
-observe(m::CompositeSensorModel{T} where T,x,u) = vcat([observe(s,x,u) for s in m.models])
-observe(m::CompositeSensorModel{T} where T,x) = vcat([observe(s,x) for s in m.models])
-measurement_jacobian(m::CompositeSensorModel{T} where T,x) = vcat([measurement_jacobian(s,x) for s in m.models])
 
 struct BoundedSensor{S,B}
     sensor::S
@@ -237,6 +214,7 @@ end
 # in_range(m::BoundedSensor{S,B} where {S<:LinearSensor,B}, x) = norm(z) < m.bounds
 in_range(m::BoundedSensor{S,B} where {S<:RangeSensor,B}, x) = norm(observe(m.sensor,x)) < m.bounds
 in_range(m::BoundedSensor{S,B} where {S<:BearingSensor,B}, x) = norm(m.sensor.x-x) < m.bounds
+in_range(m::BoundedSensor{S,B} where {S<:LinearSensor,B}, x) = norm(m.sensor.x-x) < m.bounds
 function measurement_jacobian(m::BoundedSensor, x)
     z = observe(m.sensor, x)
     ∇ = measurement_jacobian(m.sensor, x)
@@ -247,6 +225,7 @@ function measurement_jacobian(m::BoundedSensor, x)
     end
 end
 deterministic(m::BoundedSensor) = BoundedSensor(deterministic(m.sensor),m.bounds)
+input_size(m::BoundedSensor) = input_size(m.sensor)
 
 struct AdditiveGaussianSensor{S,N} <: ProbabilisticObservationModel
     sensor::S
@@ -265,6 +244,24 @@ observe(m::AdditiveGaussianSensor{S,N} where {S<:RangeSensor,N},x) = observe(m.s
 const LinearGaussianSensor{N,M,P,T} = AdditiveGaussianSensor{LinearSensor{N,M,P,T},N}
 LinearGaussianSensor(C,D,R) = AdditiveGaussianSensor(LinearSensor(C,D),SMatrix{size(R)...}(R),MultivariateNormal(zeros(size(C,1)),Matrix(R)))
 LinearGaussianSensor(sys::LinearSensor,R) = AdditiveGaussianSensor(sys,SMatrix{size(R)...}(R),MultivariateNormal(zeros(size(sys.C,1)),Matrix(R)))
+
+
+# composite sensor models
+struct CompositeSensorModel{T}
+    models::T
+    input_size::Int
+end
+function CompositeSensorModel(models::T where {T <: Tuple})
+    for m in models
+        @assert input_size(m) == input_size(models[1])
+    end
+    CompositeSensorModel(models,input_size(models[1]))
+end
+deterministic(m::CompositeSensorModel) = CompositeSensorModel(tuple([deterministic(s for s in m.models)]...),m.input_size)
+observe(m::CompositeSensorModel{T} where T,x,u) = vcat([observe(s,x,u) for s in m.models])
+observe(m::CompositeSensorModel{T} where T,x) = vcat([observe(s,x) for s in m.models])
+measurement_jacobian(m::CompositeSensorModel{T} where T,x) = vcat([measurement_jacobian(s,x) for s in m.models])
+input_size(m::CompositeSensorModel) = m.input_size
 
 observe(cm::CompositeSensorModel{T} where {T <: Tuple},x) = vcat([observe(m,x) for m in cm.models]...)
 measurement_jacobian(cm::CompositeSensorModel{T} where {T <: Tuple},x) = vcat([measurement_jacobian(m,x) for m in model]...)
