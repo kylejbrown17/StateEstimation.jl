@@ -178,29 +178,32 @@ function inverse_unscented_transform(σ_pts,weights)
 
     return μ,Σ
 end
-function predict(m::UKF,μ,Σ,u)
-    μ_type = typeof(μ)
+function predict(m::UKF,μ::V,Σ,u) where V
     σ_pts, weights = unscented_transform(μ,Σ,m.λ,m.n)
     σ_pts = [propagate(deterministic(m.transition_model),pt,u) for pt in σ_pts]
     (μ,Σ) = inverse_unscented_transform(σ_pts,weights)
-    μ = convert(μ_type,μ)
+    μ = convert(V,μ)
     Σ = Σ + m.Q
     return μ,Σ
 end
 function predict!(m::UKF,u)
     m.μ,m.Σ = predict(m,m.μ,m.Σ,u)
 end
-function update(m::UKF,μ,Σ,z)
+function update(m::UKF,μ::V,Σ::M,z) where {V,M}
     σ_pts, weights = unscented_transform(μ,Σ,m.λ,m.n)
-    Z = hcat([observe(deterministic(m.observation_model),pt) for pt in σ_pts]...)
+    σ_pts = [Array(p) for p in σ_pts]
+    # Z = hcat([observe(deterministic(m.observation_model),pt) for pt in σ_pts]...)
+    # ẑ = Z * weights
+    Z = hcat([Array(observe(deterministic(m.observation_model),pt)) for pt in σ_pts]...)
+    # ẑ = sum(Z .* weights)
     ẑ = Z * weights
     W = diagm((0=>weights))
     Szz = (Z .- z)*W*(Z .- z)' + m.R
     Sxz = (hcat(σ_pts...) .- μ) * W * (Z .- z)'
     Kt = Sxz*inv(Szz)
 
-    μ = μ + Kt*(z .- ẑ)
-    Σ = Σ - Kt*Szz*Kt'
+    μ = convert(V, μ + Kt*(z .- ẑ))
+    Σ = convert(M, Σ - Kt*Szz*Kt')
 
     return μ,Σ
 end
