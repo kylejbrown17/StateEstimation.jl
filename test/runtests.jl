@@ -14,8 +14,6 @@ using Vec
 #     end
 # end
 
-# include("grid_graph_tests.jl")
-
 # Transition Models
 let
     x = [0.0;1.0]

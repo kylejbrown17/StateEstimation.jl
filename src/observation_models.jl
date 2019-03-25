@@ -2,6 +2,7 @@ export
     ObservationModel,
     DeterministicObservationModel,
     ProbabilisticObservationModel,
+    measurement_likelihood,
 
     MobileSensor,
     LinearSensor,
@@ -16,6 +17,7 @@ export
     CompositeSensorModel,
     observe,
     in_range,
+    get_range,
     input_size,
     measurement_jacobian
 
@@ -32,6 +34,7 @@ abstract type DiscreteObservationModel <: ObservationModel end
 deterministic(m::DeterministicObservationModel) = m
 get_range(m::ObservationModel) = Inf
 in_range(m::ObservationModel,x) = true
+measurement_likelihood(m::ObservationModel,v,z) = ones(size(v,1))/size(v,1)
 
 mutable struct MobileSensor{S,T<:Transformation}
     sensor::S
@@ -190,7 +193,7 @@ measurement_jacobian(m::GaussianBearingSensor, x) = SMatrix{2,2}(([0.0 1.0;-1.0 
 # end
 
 
-struct BoundedSensor{S,B}
+struct BoundedSensor{S,B} <: ObservationModel
     sensor::S
     bounds::B
 end
@@ -214,7 +217,10 @@ end
 # in_range(m::BoundedSensor{S,B} where {S<:LinearSensor,B}, x) = norm(z) < m.bounds
 in_range(m::BoundedSensor{S,B} where {S<:RangeSensor,B}, x) = norm(observe(m.sensor,x)) < m.bounds
 in_range(m::BoundedSensor{S,B} where {S<:BearingSensor,B}, x) = norm(m.sensor.x-x) < m.bounds
-in_range(m::BoundedSensor{S,B} where {S<:LinearSensor,B}, x) = norm(m.sensor.x-x) < m.bounds
+in_range(m::BoundedSensor{S,B} where {S<:LinearSensor,B}, x) = norm(x) < m.bounds
+get_range(m::BoundedSensor{S,B} where {S<:RangeSensor,B}, x) = m.bounds
+get_range(m::BoundedSensor{S,B} where {S<:BearingSensor,B}, x) = m.bounds
+get_range(m::BoundedSensor{S,B} where {S<:LinearSensor,B}, x) = m.bounds
 function measurement_jacobian(m::BoundedSensor, x)
     z = observe(m.sensor, x)
     ∇ = measurement_jacobian(m.sensor, x)

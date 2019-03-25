@@ -11,10 +11,12 @@ using CoordinateTransformations, Rotations
 
 export
     Filter,
-    BinaryDiscreteFilter,
+    StateEstimator,
     KalmanFilter,
     ExtendedKalmanFilter, EKF,
     UnscentedKalmanFilter, UKF,
+    BinaryDiscreteFilter,
+    TimedFilter,
     unscented_transform,
     inverse_unscented_transform,
     deterministic,
@@ -30,9 +32,11 @@ include("observation_models.jl")
 include("transition_models.jl")
 
 abstract type Filter end
+const StateEstimator = Filter
 function deterministic(m)
     error(string("deterministic(m::",typeof(m),") not implemented for "))
 end
+predict!(m::Filter,u,t::Float64) = predict!(m,μ)
 
 mutable struct KalmanFilter{N,T <: Real,V <: StaticArray{Tuple{N},T,1}, W <: SMatrix{N,N,T}} <: Filter
     μ::V # μ::SVector{n,T} # mean vector
@@ -204,16 +208,16 @@ function update!(m::UKF,u)
     m.μ,m.Σ = update(m,m.μ,m.Σ,u)
 end
 
-mutable struct BinaryDiscreteFilter{N,V,T,G} <: Filter
-    pts                 ::SVector{N,V} # distribution over possible locations of target
-    μ                   ::SVector{N,Int} # hypothesis
+mutable struct BinaryDiscreteFilter{N,V,F,G} <: Filter
+    pts                 ::V # distribution over possible locations of target
+    μ                   ::SVector{N,Float64} # hypothesis
     # kdtree              ::NearestNeighbors.KDTree
     # k                   ::Int
-    transition_model    ::BinaryReachabilityTransitionModel{T}
-    observation_model   ::G
+    transition_model    ::F # = BinaryReachabilityTransitionModel
+    observation_model   ::G #
 end
-function BinaryDiscreteFilter(pts::MatrixLike,μ::MatrixLike,sysF,sysG)
-    BinaryDiscreteFilter(SVector{size(pts,1)}(pts),SVector{size(μ,1)}(μ),sysF,sysG)
+function BinaryDiscreteFilter(pts,μ::MatrixLike,sysF,sysG)
+    BinaryDiscreteFilter(pts,SVector{size(μ,1)}(μ),sysF,sysG)
 end
 # function BinaryDiscreteFilter(pts::MatrixLike,μ::MatrixLike,kdtree,k,sysF,sysG)
 #     N = length(pts)
@@ -252,7 +256,7 @@ function update(m::BinaryDiscreteFilter,μ,z)
     # SVector{size(μ,1),Int}([(i ∈ idxs) for i in 1:N])
     h = μ .* measurement_likelihood(m.observation_model, μ, z)
     h = h ./ sum(h)
-    μ = SVector{size(μ,1),Int}(h .> 0)
+    μ = SVector{size(μ,1),Float64}(h .> 0)
 end
 function update!(m::BinaryDiscreteFilter,z)
     m.μ = update(m,m.μ,z)
@@ -272,5 +276,40 @@ end
 # end
 # const MHF = MultiHypothesisFilter
 
+"""
+    A filter model that only responds to the predict!() call every Δt seconds
+"""
+mutable struct TimedFilter{F<:Filter} <: Filter
+    filter::F
+    Δt::Float64
+    t::Float64
+end
+function predict(m::TimedFilter,μ,t::Float64)
+    if t - m.t >= m.Δt
+        return predict(m.filter,μ)
+    end
+    return μ
+end
+function predict(m::TimedFilter,μ,u,t::Float64)
+    if t - m.t >= m.Δt
+        return predict(m.filter,μ,u)
+    end
+    return μ
+end
+function predict!(m::TimedFilter,u,t::Float64)
+    if t - m.t >= m.Δt
+        predict!(m.filter,u)
+        m.t = t
+    end
+    m
+end
+function predict!(m::TimedFilter,t::Float64)
+    if t - m.t >= m.Δt
+        predict!(m.filter)
+        m.t = t
+    end
+    m
+end
+update!(m::TimedFilter,z) = update!(m.filter,z)
 
 end # module
