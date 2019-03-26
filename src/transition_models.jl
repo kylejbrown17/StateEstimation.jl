@@ -83,14 +83,14 @@ function blended_single_integrator_2D(dt::Float64,μ::Float64=1.0)
     A = [
         1.0     0.0     (1.0-μ)*dt  0.0         ;
         0.0     1.0     0.0         (1.0-μ)*dt  ;
-        0.0     0.0     0.0         0.0         ;
-        0.0     0.0     0.0         0.0         ;
+        0.0     0.0     1.0-μ       0.0         ;
+        0.0     0.0     0.0         0.0-μ       ;
     ]
     B = [
         μ*dt    0.0 ;
         0.0     μ*dt;
-        1.0     0.0 ;
-        0.0     1.0 ;
+        μ   0.0 ;
+        0.0     μ ;
     ]
     DiscreteLinearSystem(A,B)
 end
