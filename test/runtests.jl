@@ -16,6 +16,14 @@ using Vec
 
 # Transition Models
 let
+    dt = 0.1
+    single_integrator_1D(dt)
+    single_integrator_2D(dt)
+    blended_single_integrator_2D(dt)
+    double_integrator_1D(dt)
+    double_integrator_2D(dt)
+end
+let
     x = [0.0;1.0]
     A = [1.0 0.1; 0.0 1.0]
     B = [0.0; 0.1]

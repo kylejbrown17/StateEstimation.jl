@@ -1,7 +1,10 @@
 export
     DynamicSystem,
     DiscreteLinearSystem,
+    single_integrator_1D,
     single_integrator_2D,
+    blended_single_integrator_2D,
+    double_integrator_1D,
     double_integrator_2D,
     DiscreteLinearGaussianSystem,
     BinaryReachabilityTransitionModel,
@@ -41,11 +44,22 @@ function state_jacobian(sys::DiscreteLinearSystem)
     sys.A
 end
 
+"""
+    single_integrator_1D
+
+    state = [x]
+"""
 function single_integrator_1D(dt::Float64)
     A = [1.0]
     B = dt * [1.0]
     DiscreteLinearSystem(A,B)
 end
+
+"""
+    single_integrator_2D
+
+    state = [x, y]
+"""
 function single_integrator_2D(dt::Float64)
     A = [
         1.0 0.0;
@@ -57,6 +71,35 @@ function single_integrator_2D(dt::Float64)
     ]
     DiscreteLinearSystem(A,B)
 end
+
+"""
+    blended_single_integrator_2D
+
+    state = [x, y, ẋ, ẏ]
+    `μ` is a blending coefficient that combines the previous velocity with the
+    commanded velocity
+"""
+function blended_single_integrator_2D(dt::Float64,μ::Float64=1.0)
+    A = [
+        1.0     0.0     (1.0-μ)*dt  0.0         ;
+        0.0     1.0     0.0         (1.0-μ)*dt  ;
+        0.0     0.0     0.0         0.0         ;
+        0.0     0.0     0.0         0.0         ;
+    ]
+    B = [
+        μ*dt    0.0 ;
+        0.0     μ*dt;
+        1.0     0.0 ;
+        0.0     1.0 ;
+    ]
+    DiscreteLinearSystem(A,B)
+end
+
+"""
+    double_integrator_2D
+
+    state = [x, ẋ]
+"""
 function double_integrator_1D(dt::Float64)
     A = [
         1.0 0.0;
@@ -68,6 +111,12 @@ function double_integrator_1D(dt::Float64)
     ]
     DiscreteLinearSystem(A,B)
 end
+
+"""
+    double_integrator_2D
+
+    state = [x, y, ẋ, ẏ]
+"""
 function double_integrator_2D(dt::Float64)
     A = [
         1.0 0.0 dt 0.0;
