@@ -315,4 +315,8 @@ function predict!(m::TimedFilter,t::Float64)
 end
 update!(m::TimedFilter,z) = update!(m.filter,z)
 
+
+include("filters/quad_tree_filter.jl")
+
+
 end # module
