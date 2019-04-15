@@ -265,6 +265,8 @@ function update!(m::BinaryDiscreteFilter,z)
     m.μ = update(m,m.μ,z)
 end
 
+include("filters/discrete_filter.jl")
+
 # mutable struct HistogramFilter{N,V,F,G} <: Filter
 #     pts                 ::SVector{N,V} # distribution over possible locations of target
 #     μ                   ::SVector{N,Bool} # hypothesis
