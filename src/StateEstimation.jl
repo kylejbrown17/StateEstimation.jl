@@ -214,30 +214,12 @@ end
 mutable struct BinaryDiscreteFilter{N,V,F,G} <: Filter
     pts                 ::V # distribution over possible locations of target
     μ                   ::SVector{N,Float64} # hypothesis
-    # kdtree              ::NearestNeighbors.KDTree
-    # k                   ::Int
     transition_model    ::F # = BinaryReachabilityTransitionModel
     observation_model   ::G #
 end
 function BinaryDiscreteFilter(pts,μ::MatrixLike,sysF,sysG)
     BinaryDiscreteFilter(pts,SVector{size(μ,1)}(μ),sysF,sysG)
 end
-# function BinaryDiscreteFilter(pts::MatrixLike,μ::MatrixLike,kdtree,k,sysF,sysG)
-#     N = length(pts)
-#     BinaryDiscreteFilter(
-#         SVector{size(pts,1)}(pts),SVector{size(μ,1)}(μ),kdtree,k,sysF,sysG)
-# end
-# function BinaryDiscreteFilter(pts,k=4,transition_model,observation_model)
-#     N = size(pts,1)
-#     BinaryDiscreteFilter(
-#         pts,
-#         SVector{N,Bool}(zeros(N)),
-#         KDTree(pts),
-#         k,
-#         transition_model,
-#         observation_model
-#     )
-# end
 function predict(m::BinaryDiscreteFilter,μ,u)
     propagate(m.transition_model,μ,u)
 end
@@ -254,9 +236,6 @@ function update(m::BinaryDiscreteFilter,μ,z)
                     }
         z is a point estimate of the target location in R²
     """
-    # idxs, dists = knn(m.kdtree, z, m.k)
-    # N = size(μ,1)
-    # SVector{size(μ,1),Int}([(i ∈ idxs) for i in 1:N])
     h = μ .* measurement_likelihood(m.observation_model, μ, z)
     h = h ./ sum(h)
     μ = SVector{size(μ,1),Float64}(h .> 0)

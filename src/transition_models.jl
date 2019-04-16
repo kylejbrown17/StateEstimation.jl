@@ -8,6 +8,7 @@ export
     double_integrator_2D,
     DiscreteLinearGaussianSystem,
     BinaryReachabilityTransitionModel,
+    DriftTransitionModel,
     propagate,
     # propagate!,
     state_jacobian
@@ -173,3 +174,8 @@ mutable struct BinaryReachabilityTransitionModel{T <: AbstractMatrix{Int}} <: De
     A::T
 end
 propagate(sys::BinaryReachabilityTransitionModel,x,u) = typeof(x)(sys.A*x .> 0)
+
+mutable struct DriftTransitionModel{T <: AbstractMatrix}
+    A::T
+end
+StateEstimation.propagate(sys::DriftTransitionModel,x,u) = typeof(x)(sys.A*x)
