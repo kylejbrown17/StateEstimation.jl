@@ -20,6 +20,9 @@ end
 function predict!(m::DiscreteFilter,u)
     m.μ = predict(m,m.μ,u)
 end
+function predict!(m::DiscreteFilter,u,t)
+    predict!(m,u)
+end
 function update(m::DiscreteFilter,μ,z)
     """
     TODO: Measurement vector z:
@@ -30,8 +33,11 @@ function update(m::DiscreteFilter,μ,z)
                     }
         z is a point estimate of the target location in R²
     """
-    h = μ .* measurement_likelihood(m.observation_model, μ, z)
-    μ = h ./ sum(h)
+    logh = log.(μ) .+ log.(measurement_likelihood(m.observation_model, μ, z))
+    logμ = logh .- log(sum(exp.(logh)))
+    μ = exp.(logμ)
+    # h = μ .* measurement_likelihood(m.observation_model, μ, z)
+    # μ = h ./ sum(h)
 end
 function update!(m::DiscreteFilter,z)
     m.μ = update(m,m.μ,z)

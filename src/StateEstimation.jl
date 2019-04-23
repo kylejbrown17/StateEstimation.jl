@@ -291,6 +291,8 @@ function predict!(m::TimedFilter,t::Float64)
     if t - m.t >= m.Δt
         predict!(m.filter)
         m.t = t
+    elseif t < m.t
+        m.t = t
     end
     m
 end
