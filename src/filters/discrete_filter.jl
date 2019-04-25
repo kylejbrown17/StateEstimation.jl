@@ -20,7 +20,7 @@ end
 function predict!(m::DiscreteFilter,u)
     m.μ = predict(m,m.μ,u)
 end
-function predict!(m::DiscreteFilter,u,t)
+function predict!(m::DiscreteFilter,u,t::Float64)
     predict!(m,u)
 end
 function update(m::DiscreteFilter,μ,z)
